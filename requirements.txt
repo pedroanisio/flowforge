@@ -1,16 +1,41 @@
+# Core Framework
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 pydantic==2.10.3
+pydantic-settings==2.1.0
+
+# Web & Templates
 jinja2==3.1.4
 python-multipart==0.0.18
 aiofiles==24.1.0
+
+# Security & Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+slowapi==0.1.9
+
+# Logging
+python-json-logger==2.0.7
+
+# Utilities
 typing-extensions==4.12.2
 requests==2.31.0
 beautifulsoup4==4.12.2
-nltk==3.8.1
-pypandoc
 psutil==5.9.8
+
+# NLP & ML
+nltk==3.8.1
 sentence-transformers>=2.7.0
 scikit-learn>=1.3.0
 spacy>=3.7.2
-huggingface-hub>=0.20.0 
+huggingface-hub>=0.20.0
+
+# Document Processing
+pypandoc==1.13
+simpleeval==0.9.13
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2

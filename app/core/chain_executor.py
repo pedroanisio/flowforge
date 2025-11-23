@@ -328,20 +328,22 @@ class ChainExecutor:
         return result.data or result.file_data or {}
     
     def _execute_condition_node(self, node: ChainNode, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute conditional logic node"""
+        """Execute conditional logic node with safe evaluation"""
         condition = node.config.get("condition", "true")
-        
-        # Simple condition evaluation (could be enhanced with safe expression evaluation)
+
+        # Safe condition evaluation using simpleeval
         try:
+            from simpleeval import simple_eval
+
             # Create safe evaluation context
             eval_context = {
                 "input": context["input"],
                 "results": context["results"]
             }
-            
-            # Very basic condition evaluation - in production, use a safer method
-            result = eval(condition, {"__builtins__": {}}, eval_context)
-            
+
+            # Safe evaluation - prevents code injection
+            result = simple_eval(condition, names=eval_context)
+
             return {
                 "condition_result": bool(result),
                 "condition": condition

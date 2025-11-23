@@ -1,8 +1,14 @@
-from fastapi import FastAPI, Request, Form, HTTPException, File, UploadFile
+from fastapi import FastAPI, Request, Form, HTTPException, File, UploadFile, Depends
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from typing import Dict, Any
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from typing import Dict, Any, Optional
+from datetime import timedelta
 import os
 import json
 import time
@@ -13,20 +19,53 @@ from pathlib import Path
 
 from .core.plugin_manager import PluginManager
 from .core.chain_manager import ChainManager
+from .core.config import settings
+from .core.auth import (
+    authenticate_user, create_access_token, get_current_active_user,
+    optional_auth, Token, User
+)
+from .core.logging_config import logger
 from .models.plugin import PluginInput
 from .models.response import PluginListResponse, PluginExecutionResponse
 from .models.chain import ChainDefinition, ChainExecutionResult
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
+
 # Initialize FastAPI app
 app = FastAPI(
-    title=" Plugin System with Chain Builder",
+    title="Neural Plugin System with Chain Builder",
     description="A FastAPI + Pydantic web application with dynamic plugin system and visual chain builder",
     version="2.0.0"
+)
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Initialize managers
 plugin_manager = PluginManager()
 chain_manager = ChainManager(plugin_manager)
+
+# Log application startup
+logger.info(
+    f"Starting {app.title} v{app.version}",
+    extra={
+        "environment": settings.environment,
+        "auth_enabled": settings.enable_auth,
+        "rate_limit_enabled": settings.rate_limit_enabled,
+        "max_upload_mb": settings.max_upload_size_mb
+    }
+)
 
 # Setup templates and static files
 templates = Jinja2Templates(directory="app/templates")
@@ -40,19 +79,50 @@ templates.env.filters['tojsonpretty'] = tojsonpretty
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
-async def _stream_upload_to_temp(upload_file: UploadFile) -> str:
-    """Stream uploaded file to temporary location without loading into memory"""
+async def _stream_upload_to_temp(upload_file: UploadFile, max_size_bytes: Optional[int] = None) -> str:
+    """
+    Stream uploaded file to temporary location without loading into memory
+
+    Args:
+        upload_file: The uploaded file
+        max_size_bytes: Maximum file size in bytes (defaults to settings.max_upload_size_bytes)
+
+    Raises:
+        HTTPException: If file exceeds maximum size
+        RuntimeError: If file streaming fails
+    """
+    if max_size_bytes is None:
+        max_size_bytes = settings.max_upload_size_bytes
+
     temp_file_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}_{upload_file.filename}")
-    
+
     try:
+        total_size = 0
         async with aiofiles.open(temp_file_path, 'wb') as temp_file:
             while chunk := await upload_file.read(8192):  # 8KB chunks
+                total_size += len(chunk)
+
+                # Check file size limit
+                if total_size > max_size_bytes:
+                    # Clean up partial file
+                    if os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File size exceeds maximum allowed size of {settings.max_upload_size_mb}MB"
+                    )
+
                 await temp_file.write(chunk)
+
+        logger.info(f"File uploaded successfully: {upload_file.filename} ({total_size} bytes)")
         return temp_file_path
+    except HTTPException:
+        raise
     except Exception as e:
         # Clean up partial file if error occurs
         if os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
+        logger.error(f"Failed to stream upload: {e}")
         raise RuntimeError(f"Failed to stream upload to temporary file: {e}")
 
 
@@ -84,13 +154,63 @@ async def favicon():
     return FileResponse("app/static/favicon.ico")
 
 
+# ========== AUTHENTICATION ENDPOINTS ==========
+
+@app.post("/token", response_model=Token)
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
+    """
+    OAuth2 compatible token login endpoint
+
+    Usage:
+        curl -X POST http://localhost:8000/token \\
+             -d "username=admin&password=secret"
+    """
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        logger.warning(f"Failed login attempt for user: {form_data.username}")
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    logger.info(f"User logged in: {user.username}")
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.get("/users/me")
+async def read_users_me(current_user: User = Depends(get_current_active_user)):
+    """Get current user information (requires authentication if enabled)"""
+    return current_user
+
+
+@app.get("/auth/status")
+async def auth_status():
+    """Check authentication status and configuration"""
+    return {
+        "auth_enabled": settings.enable_auth,
+        "rate_limit_enabled": settings.rate_limit_enabled,
+        "max_upload_size_mb": settings.max_upload_size_mb,
+        "environment": settings.environment
+    }
+
+
+# ========== WEB INTERFACE ROUTES ==========
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Homepage showing available plugins"""
     plugins = plugin_manager.get_all_plugins()
     return templates.TemplateResponse("index.html", {
         "request": request,
-        "plugins": plugins
+        "plugins": plugins,
+        "auth_enabled": settings.enable_auth
     })
 
 
@@ -101,7 +221,8 @@ async def how_to_page(request: Request):
 
 
 @app.get("/api/plugins", response_model=PluginListResponse)
-async def get_plugins():
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def get_plugins(request: Request):
     """API endpoint to get all available plugins"""
     plugins = plugin_manager.get_all_plugins()
     return PluginListResponse(success=True, plugins=plugins)
@@ -121,9 +242,22 @@ async def plugin_page(request: Request, plugin_id: str):
 
 
 @app.post("/api/plugin/{plugin_id}/execute")
-async def execute_plugin_api(plugin_id: str, request: Request, input_file: UploadFile = File(None)):
-    """API endpoint to execute a plugin"""
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def execute_plugin_api(
+    plugin_id: str,
+    request: Request,
+    input_file: UploadFile = File(None),
+    current_user: Optional[User] = Depends(optional_auth)
+):
+    """
+    API endpoint to execute a plugin
+
+    Requires authentication if ENABLE_AUTH=true
+    Rate limited to prevent abuse
+    File size limited to MAX_UPLOAD_SIZE_MB
+    """
     try:
+        logger.info(f"Executing plugin: {plugin_id}", extra={"user": getattr(current_user, 'username', 'anonymous')})
         form_data = await request.form()
         data = dict(form_data)
         
