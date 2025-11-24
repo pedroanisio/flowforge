@@ -3,7 +3,7 @@
 # =============================================================================
 # Stage 1: Build Pandoc from source using cabal with proper data files
 # =============================================================================
-FROM haskell:9.4-slim as pandoc-builder
+FROM haskell:9.8-slim-bullseye as pandoc-builder
 
 # Install system dependencies for building Pandoc
 RUN apt-get update && apt-get install -y \
@@ -31,9 +31,13 @@ RUN mkdir -p /usr/local/share/pandoc && \
     cp -r pandoc-3.7.0.2/data/* /usr/local/share/pandoc/ && \
     rm -rf /tmp/pandoc-3.7.0.2
 
-# Create the cabal store directory structure and link data files
-RUN mkdir -p /root/.local/state/cabal/store/ghc-9.4.8/pandoc-3.7.0.2-065ad85b97bf30952315d8b22ac449d77023c049fd550b60cfb99f14d4f0a926/share && \
-    ln -s /usr/local/share/pandoc /root/.local/state/cabal/store/ghc-9.4.8/pandoc-3.7.0.2-065ad85b97bf30952315d8b22ac449d77023c049fd550b60cfb99f14d4f0a926/share/data
+# Create the cabal store directory structure and link data files dynamically
+RUN PANDOC_STORE_PATH=$(find /root/.local/state/cabal/store -type d -path "*/pandoc-3.7.0.2-*/share" | head -n 1) && \
+    if [ -n "$PANDOC_STORE_PATH" ]; then \
+        ln -s /usr/local/share/pandoc "$PANDOC_STORE_PATH/data"; \
+    else \
+        echo "Warning: Pandoc store path not found, skipping data file symlink"; \
+    fi
 
 # Verify pandoc works with data files
 RUN pandoc --version && pandoc --print-default-data-file abbreviations > /dev/null
