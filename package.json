@@ -1,19 +1,31 @@
 {
-  "name": "dynamic-web-plugins",
-  "version": "1.0.0",
-  "description": "This project is a modern, web-based application that features a dynamic plugin system built with FastAPI and Pydantic. Each plugin can define its own user interface and I/O specifications through a simple, yet powerful, manifest-driven architecture. The system automatically discovers and loads plugins at runtime, making it highly extensible and easy to maintain.",
+  "name": "flowforge",
+  "version": "2.0.0",
+  "description": "AI-powered workflow automation platform with visual chain builder and intelligent plugin orchestration. Build document processing pipelines with drag-and-drop interface, get ML-based optimization, and leverage 10+ pre-built plugins.",
   "main": "index.js",
   "scripts": {
     "build-css": "./node_modules/.bin/tailwindcss -i ./app/static/css/src/main.css -o ./app/static/css/dist/main.css",
+    "build-css:watch": "./node_modules/.bin/tailwindcss -i ./app/static/css/src/main.css -o ./app/static/css/dist/main.css --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pedroanisio/dwp.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "workflow-automation",
+    "document-processing",
+    "ai-powered",
+    "fastapi",
+    "plugin-system",
+    "chain-builder",
+    "machine-learning",
+    "nlp",
+    "docker",
+    "pydantic"
+  ],
+  "author": "Pedro Anisio",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/pedroanisio/dwp/issues"
   },
