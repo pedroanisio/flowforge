@@ -28,6 +28,8 @@ from .core.logging_config import logger
 from .models.plugin import PluginInput
 from .models.response import PluginListResponse, PluginExecutionResponse
 from .models.chain import ChainDefinition, ChainExecutionResult
+from .ai.chain_optimizer import ChainOptimizer
+from .ai.execution_history import ExecutionHistoryManager, ExecutionRecord
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
@@ -55,6 +57,9 @@ app.add_middleware(
 # Initialize managers
 plugin_manager = PluginManager()
 chain_manager = ChainManager(plugin_manager)
+
+# Initialize AI optimizer
+ai_optimizer = ChainOptimizer()
 
 # Log application startup
 logger.info(
@@ -625,6 +630,210 @@ async def create_chain_from_template(template_id: str, data: Dict[str, Any]):
         return {"success": True, "chain": chain.dict()}
     else:
         raise HTTPException(status_code=404, detail="Template not found")
+
+
+# ========== AI-POWERED OPTIMIZATION ENDPOINTS ==========
+
+@app.post("/api/ai/chains/{chain_id}/optimize")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def optimize_chain_ai(
+    chain_id: str,
+    request: Request,
+    current_user: Optional[User] = Depends(optional_auth)
+):
+    """
+    AI-powered chain optimization
+
+    Analyzes chain and suggests optimizations for better performance
+    """
+    try:
+        chain = chain_manager.load_chain(chain_id)
+        if not chain:
+            raise HTTPException(status_code=404, detail="Chain not found")
+
+        all_chains = chain_manager.list_chains()
+        result = ai_optimizer.optimize_chain(chain, all_chains)
+
+        logger.info(f"AI optimization requested for chain {chain_id}", extra={
+            "user": getattr(current_user, 'username', 'anonymous'),
+            "speedup": result["expected_speedup"]
+        })
+
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"AI optimization failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ai/chains/{chain_id}/predictions")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def predict_chain_execution(
+    chain_id: str,
+    request: Request,
+    input_size_bytes: Optional[int] = None
+):
+    """
+    Predict chain execution time and identify bottlenecks
+
+    Query params:
+    - input_size_bytes: Optional input file size for better prediction
+    """
+    chain = chain_manager.load_chain(chain_id)
+    if not chain:
+        raise HTTPException(status_code=404, detail="Chain not found")
+
+    prediction = ai_optimizer.predict_execution(chain, input_size_bytes)
+
+    return {"success": True, "prediction": prediction}
+
+
+@app.get("/api/ai/chains/{chain_id}/suggestions")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def get_plugin_suggestions(
+    chain_id: str,
+    request: Request,
+    top_k: int = 5
+):
+    """
+    Get AI-powered plugin suggestions for next step in chain
+
+    Analyzes similar chains and patterns to recommend next plugins
+    """
+    chain = chain_manager.load_chain(chain_id)
+    if not chain:
+        raise HTTPException(status_code=404, detail="Chain not found")
+
+    all_chains = chain_manager.list_chains()
+    suggestions = ai_optimizer.suggest_next_plugins(chain, all_chains, top_k)
+
+    return {"success": True, "suggestions": suggestions}
+
+
+@app.get("/api/ai/suggestions/starter-plugins")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def get_starter_plugin_suggestions(request: Request, top_k: int = 5):
+    """
+    Get AI suggestions for starting a new chain
+
+    Returns commonly used first plugins based on historical success
+    """
+    suggestions = ai_optimizer.suggest_starter_plugins(top_k)
+
+    return {"success": True, "suggestions": suggestions}
+
+
+@app.get("/api/ai/chains/{chain_id}/similar")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def find_similar_chains_ai(
+    chain_id: str,
+    request: Request,
+    top_k: int = 5
+):
+    """
+    Find chains similar to the given chain using AI embeddings
+
+    Returns similar chains with similarity scores
+    """
+    chain = chain_manager.load_chain(chain_id)
+    if not chain:
+        raise HTTPException(status_code=404, detail="Chain not found")
+
+    all_chains = chain_manager.list_chains()
+    similar = ai_optimizer.find_similar_chains(chain, all_chains, top_k)
+
+    return {"success": True, "similar_chains": similar}
+
+
+@app.get("/api/ai/plugins/{plugin_id}/strategy")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def recommend_plugin_strategy(
+    plugin_id: str,
+    request: Request,
+    input_size_bytes: Optional[int] = None,
+    input_type: Optional[str] = None
+):
+    """
+    Get AI recommendation for optimal processing strategy
+
+    Query params:
+    - input_size_bytes: Size of input file
+    - input_type: Type of input (pdf, text, etc.)
+    """
+    recommendation = ai_optimizer.recommend_strategy(
+        plugin_id, input_size_bytes, input_type
+    )
+
+    return {"success": True, "recommendation": recommendation}
+
+
+@app.get("/api/ai/plugins/{plugin_id}/insights")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def get_plugin_insights_ai(plugin_id: str, request: Request):
+    """
+    Get AI-powered insights about a plugin
+
+    Returns performance stats, compatibility info, and usage patterns
+    """
+    insights = ai_optimizer.get_plugin_insights(plugin_id)
+
+    return {"success": True, "insights": insights}
+
+
+@app.get("/api/ai/patterns")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def get_chain_patterns(request: Request):
+    """
+    Get AI-identified common chain patterns
+
+    Returns frequently used plugin sequences and workflows
+    """
+    patterns = ai_optimizer.analyze_chain_patterns()
+
+    return {"success": True, "patterns": patterns}
+
+
+@app.get("/api/ai/insights/system")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def get_system_insights(request: Request):
+    """
+    Get AI-powered system-wide insights
+
+    Returns overall usage statistics, trends, and recommendations
+    """
+    insights = ai_optimizer.get_system_insights()
+
+    return {"success": True, "insights": insights}
+
+
+@app.get("/api/ai/execution-history")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def get_execution_history(
+    request: Request,
+    chain_id: Optional[str] = None,
+    plugin_id: Optional[str] = None,
+    limit: int = 50
+):
+    """
+    Get execution history for analysis
+
+    Query params:
+    - chain_id: Filter by specific chain
+    - plugin_id: Filter by specific plugin
+    - limit: Number of records to return
+    """
+    history_manager = ai_optimizer.history_manager
+
+    if chain_id:
+        records = history_manager.get_executions_for_chain(chain_id, limit)
+    elif plugin_id:
+        records = history_manager.get_executions_for_plugin(plugin_id, limit)
+    else:
+        records = history_manager.get_all_executions(limit)
+
+    return {
+        "success": True,
+        "executions": [record.model_dump() for record in records]
+    }
 
 
 if __name__ == "__main__":

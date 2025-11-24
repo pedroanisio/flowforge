@@ -3,22 +3,24 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from ..models.chain import (
-    ChainDefinition, ChainExecutionResult, ChainTemplate, 
+    ChainDefinition, ChainExecutionResult, ChainTemplate,
     ChainAnalytics, ChainValidationResult, ChainNode, ChainNodeType
 )
 from .chain_storage import ChainStorageManager
 from .chain_executor import ChainExecutor
 from .plugin_manager import PluginManager
+from ..ai.execution_history import ExecutionHistoryManager, ExecutionRecord
 
 
 class ChainManager:
     """Central manager for all chain operations"""
-    
+
     def __init__(self, plugin_manager: PluginManager, base_dir: str = "app/data"):
         self.plugin_manager = plugin_manager
         self.storage = ChainStorageManager(base_dir)
         self.executor = ChainExecutor(plugin_manager)
-        
+        self.history_manager = ExecutionHistoryManager()
+
         # Initialize with sample templates
         self._ensure_sample_templates()
     
@@ -97,19 +99,65 @@ class ChainManager:
         chain = self.load_chain(chain_id)
         if not chain:
             raise ValueError(f"Chain {chain_id} not found")
-        
+
         # Execute chain
         result = await self.executor.execute_chain(chain, input_data)
-        
+
         # Save execution result
         self.storage.save_execution_result(result)
-        
+
+        # Record for AI learning
+        self._record_execution_for_ai(chain, result, input_data)
+
         return result
     
     async def execute_chain_definition(self, chain: ChainDefinition, input_data: Dict[str, Any]) -> ChainExecutionResult:
         """Execute a chain definition directly (without saving)"""
         result = await self.executor.execute_chain(chain, input_data)
+
+        # Record for AI learning
+        self._record_execution_for_ai(chain, result, input_data)
+
         return result
+
+    def _record_execution_for_ai(
+        self,
+        chain: ChainDefinition,
+        result: ChainExecutionResult,
+        input_data: Dict[str, Any]
+    ):
+        """Record execution for AI analysis"""
+        try:
+            # Extract plugins used
+            plugins_used = [node.plugin_id for node in chain.nodes if node.plugin_id]
+
+            # Get input size if available
+            input_size_bytes = None
+            if "input_file" in input_data:
+                file_data = input_data["input_file"]
+                if isinstance(file_data, dict) and "size" in file_data:
+                    input_size_bytes = file_data["size"]
+
+            # Create execution record
+            record = ExecutionRecord(
+                id=result.execution_id,
+                chain_id=chain.id,
+                timestamp=datetime.fromisoformat(result.started_at),
+                duration_seconds=result.execution_time,
+                success=result.success,
+                input_size_bytes=input_size_bytes,
+                node_durations={},
+                node_results={},
+                plugins_used=plugins_used,
+                error_message=result.error,
+                metadata={}
+            )
+
+            # Record in history
+            self.history_manager.record_execution(record)
+        except Exception as e:
+            # Don't fail the execution if history recording fails
+            print(f"Failed to record execution for AI: {e}")
     
     # ========== Chain Analytics ==========
     
