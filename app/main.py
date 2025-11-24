@@ -455,6 +455,13 @@ async def chains_list(request: Request):
         "chains": chains
     })
 
+@app.get("/dashboard", response_class=HTMLResponse)
+async def ai_dashboard(request: Request):
+    """AI Analytics Dashboard"""
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request
+    })
+
 @app.post("/api/chains")
 async def create_chain(chain_data: Dict[str, Any]):
     """Create a new plugin chain"""

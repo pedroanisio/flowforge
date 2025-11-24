@@ -34,6 +34,9 @@
                     <a href="/chains" class="text-sm font-medium transition-colors hover:text-primary {% if request.endpoint == 'chains' %}text-primary{% else %}text-muted-foreground{% endif %}">
                         CHAINS
                     </a>
+                    <a href="/dashboard" class="text-sm font-medium transition-colors hover:text-primary {% if request.endpoint == 'ai_dashboard' %}text-primary{% else %}text-muted-foreground{% endif %}">
+                        📊 DASHBOARD
+                    </a>
                     <a href="/how-to" class="text-sm font-medium transition-colors hover:text-primary {% if request.endpoint == 'how_to' %}text-primary{% else %}text-muted-foreground{% endif %}">
                         INTERFACE GUIDE
                     </a>
@@ -69,6 +72,9 @@
                 </a>
                 <a href="/chains" class="block px-3 py-2 text-sm font-medium transition-colors hover:text-primary hover:bg-accent rounded-md {% if request.endpoint == 'chains' %}text-primary bg-accent{% else %}text-muted-foreground{% endif %}">
                     CHAINS
+                </a>
+                <a href="/dashboard" class="block px-3 py-2 text-sm font-medium transition-colors hover:text-primary hover:bg-accent rounded-md {% if request.endpoint == 'ai_dashboard' %}text-primary bg-accent{% else %}text-muted-foreground{% endif %}">
+                    📊 DASHBOARD
                 </a>
                 <a href="/how-to" class="block px-3 py-2 text-sm font-medium transition-colors hover:text-primary hover:bg-accent rounded-md {% if request.endpoint == 'how_to' %}text-primary bg-accent{% else %}text-muted-foreground{% endif %}">
                     INTERFACE GUIDE

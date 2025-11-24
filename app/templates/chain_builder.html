@@ -56,19 +56,67 @@
             <canvas id="chain-canvas"></canvas>
         </div>
         
-        <!-- Properties Panel -->
-        <div class="w-1/4 p-4 bg-card text-card-foreground rounded-lg shadow-md">
-            <div class="mb-4">
-                <h3 class="text-xl font-bold">Node Configuration</h3>
+        <!-- Properties & AI Panel -->
+        <div class="w-1/4 p-4 bg-card text-card-foreground rounded-lg shadow-md overflow-y-auto">
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-border mb-4">
+                <button id="tab-properties" class="flex-1 px-4 py-2 text-sm font-medium border-b-2 border-primary">
+                    🔧 PROPERTIES
+                </button>
+                <button id="tab-ai" class="flex-1 px-4 py-2 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-primary">
+                    🧠 AI ASSISTANT
+                </button>
             </div>
-            <div id="node-properties" class="panel-content">
-                <div class="text-center">
-                    <div>
-                        <div class="text-4xl">🔧</div>
-                        <h4 class="text-lg font-bold mt-2">No Node Selected</h4>
-                        <p class="text-muted-foreground">
-                            Click on a node to configure its properties and connections.
-                        </p>
+
+            <!-- Properties Tab -->
+            <div id="properties-tab" class="panel-content">
+                <div id="node-properties">
+                    <div class="text-center">
+                        <div>
+                            <div class="text-4xl">🔧</div>
+                            <h4 class="text-lg font-bold mt-2">No Node Selected</h4>
+                            <p class="text-muted-foreground text-sm">
+                                Click on a node to configure its properties and connections.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Assistant Tab -->
+            <div id="ai-tab" class="panel-content hidden">
+                <div id="ai-predictions" class="space-y-4">
+                    <!-- Execution Prediction -->
+                    <div class="bg-muted/20 rounded-lg p-3">
+                        <h4 class="text-sm font-bold mb-2">⚡ EXECUTION PREDICTION</h4>
+                        <div id="prediction-content" class="text-xs text-muted-foreground">
+                            Save chain to see AI predictions...
+                        </div>
+                    </div>
+
+                    <!-- Suggested Plugins -->
+                    <div class="bg-muted/20 rounded-lg p-3">
+                        <h4 class="text-sm font-bold mb-2">💡 SUGGESTED NEXT PLUGINS</h4>
+                        <div id="suggestions-content" class="space-y-2">
+                            <p class="text-xs text-muted-foreground">Add nodes to see suggestions...</p>
+                        </div>
+                    </div>
+
+                    <!-- Optimization -->
+                    <div class="bg-muted/20 rounded-lg p-3">
+                        <h4 class="text-sm font-bold mb-2">🚀 OPTIMIZATION</h4>
+                        <button id="optimize-chain-btn" class="w-full px-3 py-2 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50" disabled>
+                            OPTIMIZE CHAIN
+                        </button>
+                        <div id="optimization-results" class="mt-2 text-xs"></div>
+                    </div>
+
+                    <!-- Similar Chains -->
+                    <div class="bg-muted/20 rounded-lg p-3">
+                        <h4 class="text-sm font-bold mb-2">🔗 SIMILAR CHAINS</h4>
+                        <div id="similar-chains-content" class="text-xs text-muted-foreground">
+                            Save chain to find similar...
+                        </div>
                     </div>
                 </div>
             </div>

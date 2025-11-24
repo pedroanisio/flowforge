@@ -211,6 +211,13 @@ class ChainBuilder {
         document.getElementById('validate-chain')?.addEventListener('click', () => this.validateChain());
         document.getElementById('execute-chain')?.addEventListener('click', () => this.showExecutionDialog());
         document.getElementById('clear-canvas')?.addEventListener('click', () => this.clearCanvas());
+
+        // AI Tab Navigation
+        document.getElementById('tab-properties')?.addEventListener('click', () => this.switchTab('properties'));
+        document.getElementById('tab-ai')?.addEventListener('click', () => this.switchTab('ai'));
+
+        // AI Actions
+        document.getElementById('optimize-chain-btn')?.addEventListener('click', () => this.optimizeChain());
         
         // Plugin search
         document.getElementById('plugin-search')?.addEventListener('input', (e) => {
@@ -810,6 +817,240 @@ class ChainBuilder {
             classes += ' border border-input bg-background hover:bg-accent hover:text-accent-foreground';
         }
         return `<button class="${classes}">${text}</button>`;
+    }
+
+    // ========== AI FEATURES ==========
+
+    switchTab(tabName) {
+        const propertiesTab = document.getElementById('properties-tab');
+        const aiTab = document.getElementById('ai-tab');
+        const propertiesBtn = document.getElementById('tab-properties');
+        const aiBtn = document.getElementById('tab-ai');
+
+        if (tabName === 'properties') {
+            propertiesTab?.classList.remove('hidden');
+            aiTab?.classList.add('hidden');
+            propertiesBtn?.classList.add('border-primary');
+            propertiesBtn?.classList.remove('text-muted-foreground');
+            aiBtn?.classList.remove('border-primary');
+            aiBtn?.classList.add('text-muted-foreground');
+        } else {
+            propertiesTab?.classList.add('hidden');
+            aiTab?.classList.remove('hidden');
+            aiBtn?.classList.add('border-primary');
+            aiBtn?.classList.remove('text-muted-foreground');
+            propertiesBtn?.classList.remove('border-primary');
+            propertiesBtn?.classList.add('text-muted-foreground');
+
+            // Load AI insights when switching to AI tab
+            this.loadAIInsights();
+        }
+    }
+
+    async loadAIInsights() {
+        if (!this.chainData.id) {
+            // Chain not saved yet, show suggestions for starter plugins
+            await this.loadStarterSuggestions();
+            return;
+        }
+
+        // Load all AI features
+        await Promise.all([
+            this.loadExecutionPrediction(),
+            this.loadPluginSuggestions(),
+            this.loadSimilarChains()
+        ]);
+
+        // Enable optimize button if chain has nodes
+        const optimizeBtn = document.getElementById('optimize-chain-btn');
+        if (optimizeBtn && this.chainData.nodes.length > 0) {
+            optimizeBtn.disabled = false;
+        }
+    }
+
+    async loadExecutionPrediction() {
+        if (!this.chainData.id) return;
+
+        try {
+            const response = await fetch(`/api/ai/chains/${this.chainData.id}/predictions`);
+            const data = await response.json();
+
+            if (data.success) {
+                const prediction = data.prediction;
+                const content = document.getElementById('prediction-content');
+
+                if (content) {
+                    content.innerHTML = `
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Duration:</span>
+                                <span class="font-bold text-primary">${prediction.predicted_duration_human || prediction.predicted_duration_seconds.toFixed(1) + 's'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Confidence:</span>
+                                <span class="font-bold">${(prediction.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                            ${prediction.bottlenecks && prediction.bottlenecks.length > 0 ? `
+                                <div class="mt-2 pt-2 border-t border-border">
+                                    <span class="text-warning">⚠️ Bottlenecks:</span>
+                                    <div class="text-xs mt-1">${prediction.bottlenecks.join(', ')}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading prediction:', error);
+        }
+    }
+
+    async loadPluginSuggestions() {
+        if (!this.chainData.id) return;
+
+        try {
+            const response = await fetch(`/api/ai/chains/${this.chainData.id}/suggestions?top_k=3`);
+            const data = await response.json();
+
+            if (data.success) {
+                const content = document.getElementById('suggestions-content');
+                const suggestions = data.suggestions;
+
+                if (content) {
+                    if (suggestions.length === 0) {
+                        content.innerHTML = '<p class="text-xs text-muted-foreground">No suggestions available</p>';
+                    } else {
+                        content.innerHTML = suggestions.map(sugg => `
+                            <div class="bg-background rounded p-2 hover:bg-accent cursor-pointer transition-colors" onclick="window.chainBuilder.addSuggestedPlugin('${sugg.plugin_id}')">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-xs">${sugg.plugin_id}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded-full ${sugg.confidence_label === 'high' ? 'bg-green-500/20 text-green-500' : sugg.confidence_label === 'medium' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-500/20 text-gray-500'}">
+                                        ${(sugg.confidence * 100).toFixed(0)}%
+                                    </span>
+                                </div>
+                                <div class="text-xs text-muted-foreground mt-1">${sugg.reason}</div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error loading suggestions:', error);
+        }
+    }
+
+    async loadStarterSuggestions() {
+        try {
+            const response = await fetch('/api/ai/suggestions/starter-plugins?top_k=3');
+            const data = await response.json();
+
+            if (data.success) {
+                const content = document.getElementById('suggestions-content');
+                const suggestions = data.suggestions;
+
+                if (content && suggestions.length > 0) {
+                    content.innerHTML = '<p class="text-xs text-muted-foreground mb-2">Start with these plugins:</p>' +
+                        suggestions.map(sugg => `
+                            <div class="bg-background rounded p-2 hover:bg-accent cursor-pointer transition-colors" onclick="window.chainBuilder.addSuggestedPlugin('${sugg.plugin_id}')">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium text-xs">${sugg.plugin_id}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                                        ${(sugg.confidence * 100).toFixed(0)}%
+                                    </span>
+                                </div>
+                                <div class="text-xs text-muted-foreground mt-1">${sugg.reason}</div>
+                            </div>
+                        `).join('');
+                }
+            }
+        } catch (error) {
+            console.error('Error loading starter suggestions:', error);
+        }
+    }
+
+    addSuggestedPlugin(pluginId) {
+        // Add plugin to center of canvas
+        const canvasElement = document.getElementById(this.canvasId);
+        if (canvasElement) {
+            const rect = canvasElement.getBoundingClientRect();
+            const centerX = rect.width / 2 + (Math.random() * 100 - 50);
+            const centerY = rect.height / 2 + (Math.random() * 100 - 50);
+            this.addPluginNode(pluginId, { x: centerX, y: centerY });
+            this.showNotification(`Added suggested plugin: ${pluginId}`, 'success');
+        }
+    }
+
+    async loadSimilarChains() {
+        if (!this.chainData.id) return;
+
+        try {
+            const response = await fetch(`/api/ai/chains/${this.chainData.id}/similar?top_k=3`);
+            const data = await response.json();
+
+            if (data.success) {
+                const content = document.getElementById('similar-chains-content');
+                const similar = data.similar_chains;
+
+                if (content) {
+                    if (similar.length === 0) {
+                        content.innerHTML = '<p class="text-xs text-muted-foreground">No similar chains found</p>';
+                    } else {
+                        content.innerHTML = similar.map(chain => `
+                            <div class="bg-background rounded p-2 hover:bg-accent transition-colors">
+                                <div class="font-medium text-xs">${chain.chain_name}</div>
+                                <div class="text-xs text-muted-foreground">
+                                    ${chain.num_nodes} nodes • ${chain.predicted_duration.toFixed(1)}s
+                                    • ${(chain.similarity_score * 100).toFixed(0)}% similar
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error loading similar chains:', error);
+        }
+    }
+
+    async optimizeChain() {
+        if (!this.chainData.id) {
+            alert('Please save the chain first');
+            return;
+        }
+
+        try {
+            this.showNotification('Analyzing chain for optimization...', 'info');
+
+            const response = await fetch(`/api/ai/chains/${this.chainData.id}/optimize`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                const resultsDiv = document.getElementById('optimization-results');
+
+                if (resultsDiv) {
+                    resultsDiv.innerHTML = `
+                        <div class="mt-2 p-2 bg-primary/10 rounded text-primary">
+                            <div class="font-bold">✨ Optimization Results</div>
+                            <div class="mt-1">Speedup: ${data.expected_speedup}x</div>
+                            <div>Time Saved: ${data.time_saved_seconds.toFixed(1)}s</div>
+                            ${data.improvements.length > 0 ? `
+                                <div class="mt-2 text-xs">
+                                    ${data.improvements.map(imp => `• ${imp.description}`).join('<br>')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+
+                    this.showNotification(`Optimization complete! ${data.expected_speedup}x speedup possible`, 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Error optimizing chain:', error);
+            this.showNotification('Failed to optimize chain', 'error');
+        }
     }
 }
 

@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+{% from "components/button.html" import button %}
+
+{% block title %}📊 AI DASHBOARD{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+    .stat-card {
+        @apply bg-card text-card-foreground rounded-lg shadow-md p-6 transition-all hover:shadow-lg;
+    }
+    .metric-value {
+        @apply text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
+    }
+    .chart-container {
+        @apply bg-card text-card-foreground rounded-lg shadow-md p-6;
+        min-height: 300px;
+    }
+    .insight-item {
+        @apply p-4 rounded-lg border border-border hover:border-primary transition-colors cursor-pointer;
+    }
+    .loading-skeleton {
+        @apply animate-pulse bg-muted rounded;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <header class="mb-8">
+        <h1 class="text-4xl font-bold mb-2">🧠 AI ANALYTICS DASHBOARD</h1>
+        <p class="text-muted-foreground">Real-time insights and performance analytics powered by machine learning</p>
+    </header>
+
+    <!-- Quick Stats Grid -->
+    <div id="stats-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Loading Skeletons -->
+        <div class="stat-card">
+            <div class="loading-skeleton h-4 w-24 mb-4"></div>
+            <div class="loading-skeleton h-10 w-32 mb-2"></div>
+            <div class="loading-skeleton h-3 w-40"></div>
+        </div>
+        <div class="stat-card">
+            <div class="loading-skeleton h-4 w-24 mb-4"></div>
+            <div class="loading-skeleton h-10 w-32 mb-2"></div>
+            <div class="loading-skeleton h-3 w-40"></div>
+        </div>
+        <div class="stat-card">
+            <div class="loading-skeleton h-4 w-24 mb-4"></div>
+            <div class="loading-skeleton h-10 w-32 mb-2"></div>
+            <div class="loading-skeleton h-3 w-40"></div>
+        </div>
+        <div class="stat-card">
+            <div class="loading-skeleton h-4 w-24 mb-4"></div>
+            <div class="loading-skeleton h-10 w-32 mb-2"></div>
+            <div class="loading-skeleton h-3 w-40"></div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Plugin Usage Chart -->
+        <div class="chart-container">
+            <h3 class="text-xl font-bold mb-4">📊 Most Used Plugins</h3>
+            <canvas id="plugin-usage-chart"></canvas>
+        </div>
+
+        <!-- Execution Time Trend -->
+        <div class="chart-container">
+            <h3 class="text-xl font-bold mb-4">⚡ Performance Trend</h3>
+            <canvas id="performance-chart"></canvas>
+        </div>
+    </div>
+
+    <!-- Common Patterns -->
+    <div class="bg-card text-card-foreground rounded-lg shadow-md p-6 mb-8">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold">🔗 Common Chain Patterns</h3>
+            {{ button(variant='outline', text='VIEW ALL', id='view-all-patterns', class='text-sm') }}
+        </div>
+        <div id="patterns-list" class="space-y-3">
+            <!-- Loading -->
+            <div class="insight-item">
+                <div class="loading-skeleton h-4 w-3/4 mb-2"></div>
+                <div class="loading-skeleton h-3 w-1/2"></div>
+            </div>
+            <div class="insight-item">
+                <div class="loading-skeleton h-4 w-2/3 mb-2"></div>
+                <div class="loading-skeleton h-3 w-1/3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slow Plugins Alert -->
+    <div id="slow-plugins-section" class="bg-card text-card-foreground rounded-lg shadow-md p-6 mb-8">
+        <h3 class="text-2xl font-bold mb-4">⚠️ Performance Alerts</h3>
+        <div id="slow-plugins-list" class="space-y-3">
+            <!-- Will be populated by JS -->
+        </div>
+    </div>
+
+    <!-- Recent Execution History -->
+    <div class="bg-card text-card-foreground rounded-lg shadow-md p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold">📋 Recent Executions</h3>
+            <div class="flex space-x-2">
+                {{ button(variant='outline', text='🔄 REFRESH', id='refresh-history', class='text-sm') }}
+                {{ button(variant='secondary', text='📥 EXPORT', id='export-history', class='text-sm') }}
+            </div>
+        </div>
+        <div id="execution-history" class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="border-b border-border">
+                    <tr>
+                        <th class="text-left p-2">Chain</th>
+                        <th class="text-left p-2">Duration</th>
+                        <th class="text-left p-2">Status</th>
+                        <th class="text-left p-2">Timestamp</th>
+                        <th class="text-left p-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body">
+                    <!-- Loading rows -->
+                    <tr class="border-b border-border">
+                        <td class="p-2"><div class="loading-skeleton h-4 w-32"></div></td>
+                        <td class="p-2"><div class="loading-skeleton h-4 w-20"></div></td>
+                        <td class="p-2"><div class="loading-skeleton h-4 w-16"></div></td>
+                        <td class="p-2"><div class="loading-skeleton h-4 w-24"></div></td>
+                        <td class="p-2"><div class="loading-skeleton h-4 w-16"></div></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Execution Details Modal -->
+<div id="execution-details-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-card text-card-foreground rounded-lg shadow-lg w-2/3 max-h-screen overflow-auto">
+        <div class="p-4 border-b border-border flex justify-between items-center sticky top-0 bg-card">
+            <h3 class="text-xl font-bold">📊 Execution Details</h3>
+            <button class="modal-close text-2xl">&times;</button>
+        </div>
+        <div class="p-6" id="execution-details-content">
+            <!-- Will be populated by JS -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+class DashboardManager {
+    constructor() {
+        this.systemInsights = null;
+        this.patterns = null;
+        this.executionHistory = [];
+        this.charts = {};
+        this.init();
+    }
+
+    async init() {
+        console.log('📊 Initializing AI Dashboard...');
+        this.setupEventHandlers();
+        await this.loadAllData();
+    }
+
+    setupEventHandlers() {
+        document.getElementById('refresh-history')?.addEventListener('click', () => this.loadExecutionHistory());
+        document.getElementById('export-history')?.addEventListener('click', () => this.exportHistory());
+        document.getElementById('view-all-patterns')?.addEventListener('click', () => this.viewAllPatterns());
+        document.querySelectorAll('.modal-close').forEach(btn => {
+            btn.addEventListener('click', () => this.closeModals());
+        });
+    }
+
+    async loadAllData() {
+        try {
+            await Promise.all([
+                this.loadSystemInsights(),
+                this.loadPatterns(),
+                this.loadExecutionHistory()
+            ]);
+            this.renderCharts();
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            this.showNotification('Failed to load dashboard data', 'error');
+        }
+    }
+
+    async loadSystemInsights() {
+        try {
+            const response = await fetch('/api/ai/insights/system');
+            const data = await response.json();
+
+            if (data.success) {
+                this.systemInsights = data.insights;
+                this.renderSystemStats();
+                this.renderSlowPlugins();
+            }
+        } catch (error) {
+            console.error('Error loading system insights:', error);
+        }
+    }
+
+    async loadPatterns() {
+        try {
+            const response = await fetch('/api/ai/patterns');
+            const data = await response.json();
+
+            if (data.success) {
+                this.patterns = data.patterns;
+                this.renderPatterns();
+            }
+        } catch (error) {
+            console.error('Error loading patterns:', error);
+        }
+    }
+
+    async loadExecutionHistory() {
+        try {
+            const response = await fetch('/api/ai/execution-history?limit=20');
+            const data = await response.json();
+
+            if (data.success) {
+                this.executionHistory = data.executions;
+                this.renderExecutionHistory();
+            }
+        } catch (error) {
+            console.error('Error loading execution history:', error);
+        }
+    }
+
+    renderSystemStats() {
+        if (!this.systemInsights) return;
+
+        const statsGrid = document.getElementById('stats-grid');
+        statsGrid.innerHTML = `
+            <div class="stat-card">
+                <div class="text-sm text-muted-foreground mb-2">Total Executions</div>
+                <div class="metric-value">${this.systemInsights.total_executions || 0}</div>
+                <div class="text-xs text-muted-foreground mt-2">All-time chain executions</div>
+            </div>
+            <div class="stat-card">
+                <div class="text-sm text-muted-foreground mb-2">Avg Execution Time</div>
+                <div class="metric-value">${this.systemInsights.average_execution_time_seconds?.toFixed(1) || 0}s</div>
+                <div class="text-xs text-muted-foreground mt-2">Average processing duration</div>
+            </div>
+            <div class="stat-card">
+                <div class="text-sm text-muted-foreground mb-2">Processing Time</div>
+                <div class="metric-value">${this.systemInsights.total_processing_time_hours?.toFixed(1) || 0}h</div>
+                <div class="text-xs text-muted-foreground mt-2">Total computational hours</div>
+            </div>
+            <div class="stat-card">
+                <div class="text-sm text-muted-foreground mb-2">Patterns Identified</div>
+                <div class="metric-value">${this.systemInsights.patterns_identified || 0}</div>
+                <div class="text-xs text-muted-foreground mt-2">Common chain patterns</div>
+            </div>
+        `;
+    }
+
+    renderSlowPlugins() {
+        if (!this.systemInsights || !this.systemInsights.slow_plugins) return;
+
+        const slowPlugins = this.systemInsights.slow_plugins;
+        const listElement = document.getElementById('slow-plugins-list');
+
+        if (slowPlugins.length === 0) {
+            listElement.innerHTML = '<p class="text-muted-foreground text-center">No performance issues detected! All plugins running optimally. ✅</p>';
+            return;
+        }
+
+        listElement.innerHTML = slowPlugins.map(plugin => `
+            <div class="insight-item">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h4 class="font-bold text-warning">⚠️ ${plugin.plugin_id}</h4>
+                        <p class="text-sm text-muted-foreground">
+                            Average: ${plugin.average_duration?.toFixed(2)}s |
+                            P95: ${plugin.p95_duration?.toFixed(2)}s
+                        </p>
+                    </div>
+                    <button onclick="window.dashboardManager.viewPluginInsights('${plugin.plugin_id}')" class="px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80">
+                        View Insights
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    renderPatterns() {
+        if (!this.patterns || !this.patterns.top_patterns) return;
+
+        const patternsElement = document.getElementById('patterns-list');
+        const topPatterns = this.patterns.top_patterns.slice(0, 5);
+
+        if (topPatterns.length === 0) {
+            patternsElement.innerHTML = '<p class="text-muted-foreground text-center">No patterns detected yet. Run more chains to identify patterns! 🔍</p>';
+            return;
+        }
+
+        patternsElement.innerHTML = topPatterns.map(pattern => `
+            <div class="insight-item">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h4 class="font-bold">${pattern.pattern}</h4>
+                        <p class="text-sm text-muted-foreground">Used ${pattern.frequency} times</p>
+                    </div>
+                    <span class="px-3 py-1 text-sm bg-primary/10 text-primary rounded-full">
+                        ${pattern.frequency}x
+                    </span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    renderExecutionHistory() {
+        const tbody = document.getElementById('history-table-body');
+
+        if (this.executionHistory.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-muted-foreground">No execution history yet. Run some chains to see them here!</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = this.executionHistory.map(exec => {
+            const statusClass = exec.success ? 'text-green-500' : 'text-red-500';
+            const statusText = exec.success ? '✅ Success' : '❌ Failed';
+            const duration = exec.duration_seconds?.toFixed(2) || 'N/A';
+            const timestamp = new Date(exec.timestamp).toLocaleString();
+
+            return `
+                <tr class="border-b border-border hover:bg-muted/50">
+                    <td class="p-2 font-medium">${exec.chain_id || 'Unknown'}</td>
+                    <td class="p-2">${duration}s</td>
+                    <td class="p-2 ${statusClass}">${statusText}</td>
+                    <td class="p-2 text-sm">${timestamp}</td>
+                    <td class="p-2">
+                        <button onclick="window.dashboardManager.viewExecutionDetails('${exec.id}')" class="text-primary hover:underline text-sm">
+                            View
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    renderCharts() {
+        this.renderPluginUsageChart();
+        this.renderPerformanceChart();
+    }
+
+    renderPluginUsageChart() {
+        if (!this.systemInsights || !this.systemInsights.most_used_plugins) return;
+
+        const ctx = document.getElementById('plugin-usage-chart');
+        if (!ctx) return;
+
+        const plugins = this.systemInsights.most_used_plugins.slice(0, 5);
+        const labels = plugins.map(p => p.plugin_id);
+        const data = plugins.map(p => p.usage_count);
+
+        if (this.charts.pluginUsage) {
+            this.charts.pluginUsage.destroy();
+        }
+
+        this.charts.pluginUsage = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Usage Count',
+                    data: data,
+                    backgroundColor: 'rgba(139, 92, 246, 0.5)',
+                    borderColor: 'rgba(139, 92, 246, 1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    renderPerformanceChart() {
+        if (!this.executionHistory || this.executionHistory.length === 0) return;
+
+        const ctx = document.getElementById('performance-chart');
+        if (!ctx) return;
+
+        // Get last 10 executions
+        const recentExecutions = this.executionHistory.slice(0, 10).reverse();
+        const labels = recentExecutions.map((_, idx) => `Exec ${idx + 1}`);
+        const data = recentExecutions.map(exec => exec.duration_seconds || 0);
+
+        if (this.charts.performance) {
+            this.charts.performance.destroy();
+        }
+
+        this.charts.performance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Duration (seconds)',
+                    data: data,
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    async viewPluginInsights(pluginId) {
+        try {
+            const response = await fetch(`/api/ai/plugins/${pluginId}/insights`);
+            const data = await response.json();
+
+            if (data.success) {
+                alert(`Plugin Insights for ${pluginId}:\n\n` +
+                    `Total Executions: ${data.insights.performance.total_executions}\n` +
+                    `Average Duration: ${data.insights.performance.average_duration?.toFixed(2)}s\n` +
+                    `Success Rate: ${(data.insights.performance.success_rate * 100).toFixed(1)}%\n` +
+                    `Usage Rank: #${data.insights.usage_rank}`
+                );
+            }
+        } catch (error) {
+            console.error('Error loading plugin insights:', error);
+        }
+    }
+
+    async viewExecutionDetails(execId) {
+        const execution = this.executionHistory.find(e => e.id === execId);
+        if (!execution) return;
+
+        const modal = document.getElementById('execution-details-modal');
+        const content = document.getElementById('execution-details-content');
+
+        content.innerHTML = `
+            <div class="space-y-4">
+                <div>
+                    <h4 class="font-bold text-lg mb-2">Execution Information</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <span class="text-muted-foreground">ID:</span>
+                            <span class="font-mono">${execution.id}</span>
+                        </div>
+                        <div>
+                            <span class="text-muted-foreground">Chain:</span>
+                            <span>${execution.chain_id}</span>
+                        </div>
+                        <div>
+                            <span class="text-muted-foreground">Duration:</span>
+                            <span>${execution.duration_seconds?.toFixed(2)}s</span>
+                        </div>
+                        <div>
+                            <span class="text-muted-foreground">Status:</span>
+                            <span class="${execution.success ? 'text-green-500' : 'text-red-500'}">${execution.success ? 'Success' : 'Failed'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-bold text-lg mb-2">Plugins Used</h4>
+                    <div class="flex flex-wrap gap-2">
+                        ${execution.plugins_used?.map(p => `<span class="px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm">${p}</span>`).join('') || 'None'}
+                    </div>
+                </div>
+                ${execution.node_durations ? `
+                <div>
+                    <h4 class="font-bold text-lg mb-2">Node Durations</h4>
+                    <pre class="bg-muted p-4 rounded text-sm overflow-auto">${JSON.stringify(execution.node_durations, null, 2)}</pre>
+                </div>
+                ` : ''}
+            </div>
+        `;
+
+        modal.classList.remove('hidden');
+    }
+
+    viewAllPatterns() {
+        if (!this.patterns) return;
+
+        const message = this.patterns.top_patterns.map(p =>
+            `${p.pattern} (${p.frequency}x)`
+        ).join('\n');
+
+        alert(`All Identified Patterns:\n\n${message}`);
+    }
+
+    exportHistory() {
+        const csv = 'Chain,Duration,Status,Timestamp\n' +
+            this.executionHistory.map(exec =>
+                `${exec.chain_id},${exec.duration_seconds},${exec.success ? 'Success' : 'Failed'},${exec.timestamp}`
+            ).join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `execution-history-${Date.now()}.csv`;
+        a.click();
+    }
+
+    closeModals() {
+        document.querySelectorAll('[id$="-modal"]').forEach(modal => {
+            modal.classList.add('hidden');
+        });
+    }
+
+    showNotification(message, type = 'info') {
+        if (window.Notifications) {
+            window.Notifications.show(message, type);
+        } else {
+            console.log(`${type.toUpperCase()}: ${message}`);
+        }
+    }
+}
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', () => {
+    window.dashboardManager = new DashboardManager();
+});
+</script>
+{% endblock %}
