@@ -92,6 +92,14 @@
         "average_sentence_length": {
           "type": "number",
           "description": "Average length of sentences in characters"
+        },
+        "content_nodes_found": {
+          "type": "integer",
+          "description": "Number of content-rich nodes identified"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if analysis failed"
         }
       }
     }

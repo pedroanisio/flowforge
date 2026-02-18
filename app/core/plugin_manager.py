@@ -1,8 +1,14 @@
 import time
 import shutil
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Set, Type
 from pydantic import ValidationError
-from ..models.plugin import PluginManifest, PluginInput, PluginOutput, BasePlugin
+from ..models.plugin import (
+    PluginManifest,
+    PluginInput,
+    BasePlugin,
+    is_pydantic_model_class,
+    model_json_schema,
+)
 from ..models.response import PluginExecutionResponse
 from .plugin_loader import PluginLoader
 
@@ -61,16 +67,24 @@ class PluginManager:
                     return
                 
                 # Verify it's a Pydantic model
-                if not hasattr(response_model, '__fields__'):
+                if not is_pydantic_model_class(response_model):
                     plugin.compliance_status = {
                         "compliant": False,
                         "error": f"Plugin '{plugin.id}' response model must be a Pydantic BaseModel"
                     }
                     return
-                
+
+                contract_warnings = self._check_manifest_contract_parity(
+                    manifest=plugin,
+                    plugin_class=plugin_class,
+                    response_model=response_model,
+                )
+
                 plugin.compliance_status = {
                     "compliant": True,
-                    "response_model": response_model.__name__
+                    "response_model": response_model.__name__,
+                    "contract_aligned": len(contract_warnings) == 0,
+                    "contract_warnings": contract_warnings,
                 }
                 
             except Exception as e:
@@ -202,24 +216,19 @@ class PluginManager:
             
             # Execute plugin
             plugin_instance = plugin_class()
-            result = plugin_instance.execute(plugin_input.data)
-            
-            # Validate response against plugin's response model
             try:
-                validated_response = plugin_instance.validate_response(result)
-                # Convert back to dict for consistent API
-                result = validated_response.dict()
+                result = plugin_instance.run(plugin_input.data)
             except ValidationError as e:
                 return PluginExecutionResponse(
                     success=False,
                     plugin_id=plugin_input.plugin_id,
-                    error=f"Plugin response validation failed: {str(e)}"
+                    error=f"Plugin validation failed: {str(e)}"
                 )
             except Exception as e:
                 return PluginExecutionResponse(
                     success=False,
                     plugin_id=plugin_input.plugin_id,
-                    error=f"Plugin response validation error: {str(e)}"
+                    error=f"Plugin execution error: {str(e)}"
                 )
             
             execution_time = time.time() - start_time
@@ -289,4 +298,115 @@ class PluginManager:
                     if file_ext not in allowed_extensions:
                         return f"Invalid file type for '{field_name}'. Allowed types are: {', '.join(allowed_extensions)}"
 
-        return None 
+        return None
+
+    @staticmethod
+    def _check_manifest_contract_parity(
+        manifest: PluginManifest,
+        plugin_class: Type[BasePlugin],
+        response_model: Any,
+    ) -> List[str]:
+        """
+        Compare manifest contract with runtime contract derived from plugin class.
+
+        This is a non-blocking parity report used to surface drift.
+        """
+        warnings: List[str] = []
+
+        manifest_output_schema = manifest.output.schema_definition or {}
+        runtime_output_schema = model_json_schema(response_model)
+        warnings.extend(
+            PluginManager._diff_schema_fields(
+                label="output",
+                manifest_fields=PluginManager._extract_schema_fields(manifest_output_schema),
+                runtime_fields=PluginManager._extract_schema_fields(runtime_output_schema),
+            )
+        )
+        if isinstance(manifest_output_schema.get("required"), list):
+            warnings.extend(
+                PluginManager._diff_required_fields(
+                    label="output",
+                    manifest_required=PluginManager._extract_required_fields(manifest_output_schema),
+                    runtime_required=PluginManager._extract_required_fields(runtime_output_schema),
+                )
+            )
+
+        if not hasattr(plugin_class, "get_input_model"):
+            return warnings
+
+        input_model = plugin_class.get_input_model()
+        if not input_model:
+            return warnings
+
+        runtime_input_schema = model_json_schema(input_model)
+        manifest_input_names = {field.name for field in manifest.inputs}
+        runtime_input_names = PluginManager._extract_schema_fields(runtime_input_schema)
+        warnings.extend(
+            PluginManager._diff_schema_fields(
+                label="input",
+                manifest_fields=manifest_input_names,
+                runtime_fields=runtime_input_names,
+            )
+        )
+
+        manifest_required_inputs = {field.name for field in manifest.inputs if field.required}
+        runtime_required_inputs = PluginManager._extract_required_fields(runtime_input_schema)
+        warnings.extend(
+            PluginManager._diff_required_fields(
+                label="input",
+                manifest_required=manifest_required_inputs,
+                runtime_required=runtime_required_inputs,
+            )
+        )
+
+        return warnings
+
+    @staticmethod
+    def _extract_schema_fields(schema: Dict[str, Any]) -> Set[str]:
+        properties = schema.get("properties") if isinstance(schema, dict) else None
+        if not isinstance(properties, dict):
+            return set()
+        return set(properties.keys())
+
+    @staticmethod
+    def _extract_required_fields(schema: Dict[str, Any]) -> Set[str]:
+        required = schema.get("required") if isinstance(schema, dict) else None
+        if not isinstance(required, list):
+            return set()
+        return {str(item) for item in required}
+
+    @staticmethod
+    def _diff_schema_fields(label: str, manifest_fields: Set[str], runtime_fields: Set[str]) -> List[str]:
+        warnings: List[str] = []
+        missing_in_manifest = sorted(runtime_fields - manifest_fields)
+        extra_in_manifest = sorted(manifest_fields - runtime_fields)
+
+        if missing_in_manifest:
+            warnings.append(
+                f"{label} manifest is missing fields declared at runtime: {', '.join(missing_in_manifest)}"
+            )
+        if extra_in_manifest:
+            warnings.append(
+                f"{label} manifest has fields not declared at runtime: {', '.join(extra_in_manifest)}"
+            )
+        return warnings
+
+    @staticmethod
+    def _diff_required_fields(
+        label: str,
+        manifest_required: Set[str],
+        runtime_required: Set[str],
+    ) -> List[str]:
+        warnings: List[str] = []
+        missing_required_in_manifest = sorted(runtime_required - manifest_required)
+        extra_required_in_manifest = sorted(manifest_required - runtime_required)
+
+        if missing_required_in_manifest:
+            warnings.append(
+                f"{label} manifest is missing required fields from runtime contract: {', '.join(missing_required_in_manifest)}"
+            )
+        if extra_required_in_manifest:
+            warnings.append(
+                f"{label} manifest marks fields required but runtime does not: {', '.join(extra_required_in_manifest)}"
+            )
+        return warnings

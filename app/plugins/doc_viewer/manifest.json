@@ -17,7 +17,20 @@
   ],
   "output": {
     "name": "document_view",
-    "description": "A rendered view of the structured document."
+    "description": "A rendered view of the structured document.",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "custom_template": {
+          "type": "string",
+          "description": "Name of the custom template to use for rendering"
+        },
+        "document": {
+          "type": "object",
+          "description": "Document data for rendering"
+        }
+      }
+    }
   },
   "dependencies": {
     "external": [],

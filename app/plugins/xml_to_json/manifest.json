@@ -18,7 +18,20 @@
   ],
   "output": {
     "name": "json_file",
-    "description": "The structured JSON output file."
+    "description": "The structured JSON output file.",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Path to the converted JSON file"
+        },
+        "file_name": {
+          "type": "string",
+          "description": "Name of the converted JSON file"
+        }
+      }
+    }
   },
   "tags": ["xml", "json", "parser", "dataset"],
   "dependencies": {}

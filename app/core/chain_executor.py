@@ -150,7 +150,8 @@ class ChainValidator:
                 # Check if mappings are valid
                 for mapping in connection.data_mappings:
                     # Check if source field exists in response model
-                    if hasattr(source_model, '__fields__') and mapping.source_field not in source_model.__fields__:
+                    source_fields = getattr(source_model, "model_fields", getattr(source_model, "__fields__", {}))
+                    if mapping.source_field not in source_fields:
                         warnings.append(f"Source field '{mapping.source_field}' not found in {source_node.plugin_id} output schema")
                     
                     # Check if target field exists in input schema

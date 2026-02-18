@@ -10,6 +10,7 @@ from .chain_storage import ChainStorageManager
 from .chain_executor import ChainExecutor
 from .plugin_manager import PluginManager
 from ..ai.execution_history import ExecutionHistoryManager, ExecutionRecord
+from ..models.plugin import model_json_schema
 
 
 class ChainManager:
@@ -331,7 +332,7 @@ class ChainManager:
                         "options": field.options
                     } for field in plugin.inputs
                 },
-                "output_schema": response_model.schema() if response_model else {}
+                "output_schema": model_json_schema(response_model) if response_model else {}
             }
         except Exception:
             return {

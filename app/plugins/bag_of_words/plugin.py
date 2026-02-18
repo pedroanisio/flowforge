@@ -1,12 +1,42 @@
 import re
 from typing import Dict, Any, Type
 from collections import Counter
+from pydantic import BaseModel, Field
 from ...models.plugin import BasePlugin, BasePluginResponse
 from .models import BagOfWordsResponse, WordItem, FrequencyHistogram
 
 
+class BagOfWordsInput(BaseModel):
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=100000,
+        json_schema_extra={
+            "label": "Text to Analyze",
+            "field_type": "textarea",
+            "placeholder": "Enter your text here for bag of words analysis...",
+        },
+    )
+    cutoff: int = Field(
+        default=0,
+        ge=0,
+        le=1000,
+        json_schema_extra={
+            "label": "Frequency Cutoff",
+            "field_type": "number",
+            "placeholder": "0",
+            "help": "Only show words that appear at least this many times (0 = show all words)",
+        },
+    )
+
+
 class Plugin(BasePlugin):
     """Bag of Words Plugin - Creates a bag of words representation with frequency filtering"""
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return BagOfWordsInput
     
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:

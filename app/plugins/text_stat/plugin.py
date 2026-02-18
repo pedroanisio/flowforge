@@ -19,8 +19,26 @@ class TextStatResponse(BasePluginResponse):
     sentence_count: int = Field(..., description="Estimated number of sentences")
 
 
+class TextStatInput(BaseModel):
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=100000,
+        json_schema_extra={
+            "label": "Text to Analyze",
+            "field_type": "textarea",
+            "placeholder": "Enter your text here for analysis...",
+        },
+    )
+
+
 class Plugin(BasePlugin):
     """Text Statistics Plugin - Analyzes text and provides comprehensive statistics"""
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return TextStatInput
     
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:

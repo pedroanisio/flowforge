@@ -14,7 +14,7 @@ services:
 
   # Production build with Pandoc from source (cabal method)
   web:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
       # Use BuildKit for better caching and performance
@@ -38,6 +38,11 @@ services:
       # Enable development mode
       - FASTAPI_ENV=development
       - PDF2HTMLEX_SERVICE_HOST=pdf2htmlex-service
+    # Build CSS at startup since volume mount overwrites build-time assets
+    command: >
+      sh -c "npm install &&
+             npx tailwindcss -i ./app/static/css/src/main.css -o ./app/static/css/dist/main.css --minify &&
+             uvicorn app.main:app --host 0.0.0.0 --port 5000"
     # Health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/api/plugins"]
@@ -52,11 +57,11 @@ services:
     networks:
       - plugin-network
 
-  # Fast build with pre-built Pandoc binary (recommended for development)
+  # Fast build with system Pandoc (recommended for development)
   web-simple:
-    build: 
+    build:
       context: .
-      dockerfile: Dockerfile.simple
+      dockerfile: Dockerfile.dev
     ports:
       - "8001:5000"
     volumes:
@@ -68,7 +73,11 @@ services:
       - PYTHONPATH=/app
       - FASTAPI_ENV=development
       - PDF2HTMLEX_SERVICE_HOST=pdf2htmlex-service
-    profiles: 
+    command: >
+      sh -c "npm install &&
+             npx tailwindcss -i ./app/static/css/src/main.css -o ./app/static/css/dist/main.css --minify &&
+             uvicorn app.main:app --host 0.0.0.0 --port 5000 --reload"
+    profiles:
       - simple
     restart: unless-stopped
     depends_on:
@@ -78,7 +87,7 @@ services:
 
   # Development build with system Pandoc (fastest)
   web-dev:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.dev
     ports:
@@ -92,6 +101,10 @@ services:
       - PYTHONPATH=/app
       - FASTAPI_ENV=development
       - PDF2HTMLEX_SERVICE_HOST=pdf2htmlex-service
+    command: >
+      sh -c "npm install &&
+             npx tailwindcss -i ./app/static/css/src/main.css -o ./app/static/css/dist/main.css --minify &&
+             uvicorn app.main:app --host 0.0.0.0 --port 5000 --reload"
     profiles:
       - dev
     restart: unless-stopped
