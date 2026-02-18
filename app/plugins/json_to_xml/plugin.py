@@ -97,8 +97,33 @@ class JsonToXmlResponse(BasePluginResponse):
     file_name: str = Field(..., description="Name of the converted XML file")
 
 
+class JsonToXmlInput(BaseModel):
+    input_file: Dict[str, Any] = Field(
+        ...,
+        json_schema_extra={
+            "label": "Pandoc JSON File",
+            "field_type": "file",
+            "validation": {"allowed_extensions": ["json"]},
+            "help": "Upload a Pandoc JSON file (e.g., one generated with 'pandoc -t json -o output.json').",
+        },
+    )
+    ignore_line_breaks: bool = Field(
+        default=True,
+        json_schema_extra={
+            "label": "Ignore Line Breaks",
+            "field_type": "checkbox",
+            "help": "If checked, soft and hard line breaks will be ignored, resulting in more compact paragraphs.",
+        },
+    )
+
+
 class Plugin(BasePlugin):
     """Pandoc JSON to Mini XML Plugin - Converts Pandoc JSON documents into minimal XML format"""
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return JsonToXmlInput
     
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:

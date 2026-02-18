@@ -77,8 +77,25 @@ class XmlToJsonResponse(BasePluginResponse):
     file_name: str = Field(..., description="Name of the converted JSON file")
 
 
+class XmlToJsonInput(BaseModel):
+    input_file: Dict[str, Any] = Field(
+        ...,
+        json_schema_extra={
+            "label": "XML Source File",
+            "field_type": "file",
+            "validation": {"allowed_extensions": ["xml"]},
+            "help": "Upload the XML file to be parsed into a structured JSON document.",
+        },
+    )
+
+
 class Plugin(BasePlugin):
     """XML to Structured JSON Plugin - Converts XML documents into structured JSON format"""
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return XmlToJsonInput
     
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:

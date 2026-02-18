@@ -26,7 +26,20 @@
   ],
   "output": {
     "name": "xml_file",
-    "description": "The converted XML file."
+    "description": "The converted XML file.",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Path to the converted XML file"
+        },
+        "file_name": {
+          "type": "string",
+          "description": "Name of the converted XML file"
+        }
+      }
+    }
   },
   "tags": ["json", "xml", "pandoc"],
   "dependencies": {

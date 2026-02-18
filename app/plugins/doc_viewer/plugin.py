@@ -11,10 +11,26 @@ class DocViewerResponse(BasePluginResponse):
     document: Dict[str, Any] = Field(..., description="Document data for rendering")
 
 
+class DocViewerInput(BaseModel):
+    input_file: Dict[str, Any] = Field(
+        ...,
+        json_schema_extra={
+            "label": "JSON Document",
+            "field_type": "file",
+            "validation": {"allowed_extensions": ["json"]},
+        },
+    )
+
+
 class Plugin(BasePlugin):
     """
     Document Viewer Plugin - Renders a structured JSON document.
     """
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return DocViewerInput
     
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:

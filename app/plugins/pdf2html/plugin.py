@@ -1,7 +1,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
-from typing import Dict, Any, Type, List
+from typing import Dict, Any, Type, List, Literal
 import os
 import shutil
 import logging
@@ -21,8 +21,104 @@ class Pdf2HtmlResponse(BasePluginResponse):
     docker_info: Dict[str, Any] = Field(default={}, description="Information about Docker container execution")
 
 
+class Pdf2HtmlInput(BaseModel):
+    input_file: Dict[str, Any] = Field(
+        ...,
+        json_schema_extra={
+            "label": "Upload PDF File",
+            "field_type": "file",
+            "validation": {"allowed_extensions": ["pdf"]},
+            "help": "Select a PDF file to convert to HTML format",
+        },
+    )
+    zoom: float = Field(
+        default=1.3,
+        gt=0,
+        json_schema_extra={
+            "label": "Zoom Level",
+            "field_type": "number",
+            "placeholder": "1.3",
+            "help": "Zoom level for better rendering quality (e.g., 1.0 = 100%, 1.3 = 130%)",
+        },
+    )
+    embed_css: bool = Field(
+        default=True,
+        json_schema_extra={
+            "label": "Embed CSS",
+            "field_type": "checkbox",
+            "help": "Embed CSS styles in the HTML file for better portability",
+        },
+    )
+    embed_javascript: bool = Field(
+        default=True,
+        json_schema_extra={
+            "label": "Embed JavaScript",
+            "field_type": "checkbox",
+            "help": "Embed JavaScript into the HTML file. Disabling this can reduce file size but may break functionality.",
+        },
+    )
+    optimize_text: bool = Field(
+        default=True,
+        json_schema_extra={
+            "label": "Optimize Text",
+            "field_type": "checkbox",
+            "help": "Reduces the number of HTML elements used for text, which can significantly shrink file size.",
+        },
+    )
+    embed_images: bool = Field(
+        default=True,
+        json_schema_extra={
+            "label": "Embed Images",
+            "field_type": "checkbox",
+            "help": "Embed images directly in the HTML file as base64 data",
+        },
+    )
+    output_filename: str = Field(
+        default="",
+        json_schema_extra={
+            "label": "Output Filename (optional)",
+            "field_type": "text",
+            "placeholder": "document.html",
+            "help": "Specify custom output filename. If empty, uses original PDF name with .html extension",
+        },
+    )
+    font_format: Literal["woff", "ttf", "otf", "svg"] = Field(
+        default="woff",
+        json_schema_extra={
+            "label": "Font Format",
+            "field_type": "select",
+            "options": ["woff", "ttf", "otf", "svg"],
+            "help": "Font format used in the generated HTML.",
+        },
+    )
+    printing: int = Field(
+        default=0,
+        ge=0,
+        le=1,
+        json_schema_extra={
+            "label": "Printing Mode",
+            "field_type": "number",
+            "help": "Set to 1 to enable print-optimized output.",
+        },
+    )
+    font_size_multiplier: float = Field(
+        default=4.0,
+        gt=0,
+        json_schema_extra={
+            "label": "Font Size Multiplier",
+            "field_type": "number",
+            "help": "Multiplier for font size precision in output rendering.",
+        },
+    )
+
+
 class Plugin(BasePlugin):
     """PDF to HTML Converter Plugin - Converts PDF files to HTML using pdf2htmlEX in Docker"""
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return Pdf2HtmlInput
     
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:

@@ -3,7 +3,8 @@ import shutil
 import logging
 import re
 from pathlib import Path
-from typing import Dict, Any, Type, List, Union
+from typing import Dict, Any, Type, List, Union, Literal
+from pydantic import BaseModel, Field
 from ...models.plugin import BasePlugin
 
 # Import all components from refactored modules
@@ -23,6 +24,73 @@ from .strategies import (
 logger = logging.getLogger(__name__)
 
 
+class PandocConverterInput(BaseModel):
+    input_file: Dict[str, Any] = Field(
+        ...,
+        json_schema_extra={
+            "label": "Upload File",
+            "field_type": "file",
+            "validation": {"allowed_extensions": ["epub", "html", "md", "docx", "odt", "rtf", "latex"]},
+        },
+    )
+    output_format: Literal[
+        "plain",
+        "asciidoc",
+        "pdf",
+        "html5",
+        "docbook5",
+        "epub",
+        "markdown",
+        "markdown_mmd",
+        "markdown_strict",
+        "json",
+    ] = Field(
+        ...,
+        json_schema_extra={
+            "label": "Output Format",
+            "field_type": "select",
+            "options": [
+                "plain",
+                "asciidoc",
+                "pdf",
+                "html5",
+                "docbook5",
+                "epub",
+                "markdown",
+                "markdown_mmd",
+                "markdown_strict",
+                "json",
+            ],
+        },
+    )
+    self_contained: bool = Field(
+        default=False,
+        json_schema_extra={
+            "label": "Self-Contained",
+            "field_type": "checkbox",
+            "help": "For HTML output, this embeds all assets like images and CSS into a single portable file.",
+        },
+    )
+    advanced_options: Union[str, List[str], None] = Field(
+        default=None,
+        json_schema_extra={
+            "label": "Advanced Options",
+            "field_type": "textarea",
+            "placeholder": "--verbose --columns=72 --toc --reference-links",
+            "help": "Additional pandoc command-line options. Enter space-separated options like '--verbose --columns=72 --toc=true --toc-depth=3'. Use quotes for values with spaces. Security validated to prevent injection attacks.",
+        },
+    )
+    features: Union[str, List[str], None] = Field(
+        default=None,
+        json_schema_extra={
+            "label": "Format Features",
+            "field_type": "textarea",
+            "placeholder": "smart, -raw_html, +pipe_tables",
+            "help": "Enable or disable pandoc format features. Use '+feature' to enable or '-feature' to disable. Multiple features can be separated by commas or spaces. If no +/- prefix is given, '+' (enable) is assumed.",
+        },
+    )
+
+
 class Plugin(BasePlugin):
     """Pandoc File Converter Plugin - Converts files between markup formats using Pandoc"""
     
@@ -40,6 +108,11 @@ class Plugin(BasePlugin):
             self.pandoc_executor, self.memory_monitor, self.chunking_service, self.text_extractor
         )
         self.text_extraction_strategy = TextExtractionStrategy(self.text_extractor, self.memory_monitor)
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return PandocConverterInput
     
     @classmethod
     def get_response_model(cls) -> Type[PandocConverterResponse]:
@@ -324,4 +397,3 @@ class Plugin(BasePlugin):
         format_with_features = base_format + ''.join(features)
         return format_with_features
     
-
