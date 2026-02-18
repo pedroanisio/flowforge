@@ -4,7 +4,7 @@ Execution Time Prediction
 Predicts chain execution duration based on historical data and chain characteristics.
 """
 import numpy as np
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from datetime import timedelta
 
 from ..models.chain import ChainDefinition
@@ -26,7 +26,7 @@ class ExecutionPredictor:
         plugin_durations = {}
 
         for execution in executions:
-            for plugin_id, duration in execution.node_durations.items():
+            for plugin_id, duration in self.history_manager.get_all_plugin_duration_pairs(execution):
                 if plugin_id not in plugin_durations:
                     plugin_durations[plugin_id] = []
                 plugin_durations[plugin_id].append(duration)

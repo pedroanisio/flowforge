@@ -175,8 +175,8 @@ class StrategyRecommender:
 
             if execution.success:
                 stats["successful"] += 1
-                if plugin_id in execution.node_durations:
-                    duration = execution.node_durations[plugin_id]
+                plugin_durations = self.history_manager.get_plugin_durations_from_record(execution, plugin_id)
+                for duration in plugin_durations:
                     stats["total_duration"] += duration
                     stats["durations"].append(duration)
 

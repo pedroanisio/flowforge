@@ -34,6 +34,7 @@ class TestChainOptimizer:
         chain = ChainDefinition(
             id="test-chain",
             name="Empty Chain",
+            description="",
             nodes=[],
             connections=[]
         )
@@ -49,11 +50,13 @@ class TestChainOptimizer:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[
                 ChainNode(
                     id="node1",
                     type=ChainNodeType.PLUGIN,
                     plugin_id="text_stat",
+                    position={"x": 0, "y": 0},
                     config={}
                 )
             ],
@@ -72,11 +75,13 @@ class TestChainOptimizer:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[
                 ChainNode(
                     id="node1",
                     type=ChainNodeType.PLUGIN,
                     plugin_id="text_stat",
+                    position={"x": 0, "y": 0},
                     config={}
                 )
             ],
@@ -97,6 +102,7 @@ class TestChainOptimizer:
         chain = ChainDefinition(
             id="test-chain",
             name="Empty Chain",
+            description="",
             nodes=[],
             connections=[]
         )
@@ -134,6 +140,7 @@ class TestChainOptimizer:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[],
             connections=[]
         )
@@ -165,7 +172,8 @@ class TestExecutionHistory:
             success=True,
             plugins_used=["text_stat"],
             node_durations={"node1": 1.5},
-            node_results={"node1": "success"}
+            node_results={"node1": "success"},
+            node_plugins={"node1": "text_stat"}
         )
 
         manager.record_execution(record)
@@ -219,7 +227,8 @@ class TestExecutionHistory:
             duration_seconds=2.5,
             success=True,
             plugins_used=["text_stat"],
-            node_durations={"node1": 2.5}
+            node_durations={"node1": 2.5},
+            node_plugins={"node1": "text_stat"}
         )
 
         manager.record_execution(record)
@@ -229,6 +238,7 @@ class TestExecutionHistory:
 
         assert perf["total_executions"] == 1
         assert perf["success_rate"] == 1.0
+        assert perf["average_duration"] == 2.5
 
     def test_get_average_duration(self, tmp_path):
         """Test calculating average duration"""
@@ -248,3 +258,20 @@ class TestExecutionHistory:
 
         avg = manager.get_average_duration()
         assert avg == 2.0  # (1 + 2 + 3) / 3
+
+    def test_plugin_duration_extraction_backward_compat(self, tmp_path):
+        """Test extracting plugin durations from legacy records without node plugin map."""
+        manager = ExecutionHistoryManager(data_dir=str(tmp_path))
+
+        record = ExecutionRecord(
+            id="exec-legacy",
+            chain_id="test-chain",
+            timestamp=datetime.now(),
+            duration_seconds=1.2,
+            success=True,
+            plugins_used=["text_stat"],
+            node_durations={"node-abc": 1.2}
+        )
+
+        durations = manager.get_plugin_durations_from_record(record, "text_stat")
+        assert durations == [1.2]

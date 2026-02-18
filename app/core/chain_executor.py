@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from typing import Dict, Any, List, Optional, Set, Tuple
+from typing import Dict, Any, List
 from datetime import datetime
 from collections import defaultdict, deque
 
@@ -175,6 +175,8 @@ class ChainExecutor:
         """Execute a complete plugin chain"""
         execution_id = str(uuid.uuid4())
         start_time = datetime.now()
+        node_results: Dict[str, Dict[str, Any]] = {}
+        node_execution_stats: Dict[str, Dict[str, Any]] = {}
         
         try:
             # Validate chain first
@@ -186,7 +188,6 @@ class ChainExecutor:
             execution_graph = self._build_execution_graph(chain)
             
             # Execute nodes in dependency order
-            node_results = {}
             execution_context = {
                 "input": input_data, 
                 "results": node_results,
@@ -194,23 +195,21 @@ class ChainExecutor:
             }
             
             # Execute in batches (parallel where possible)
-            for batch_index, node_batch in enumerate(execution_graph):
-                print(f"Executing batch {batch_index + 1}: {[node.id for node in node_batch]}")
-                
+            for node_batch in execution_graph:
                 # Execute nodes in parallel within batch
                 batch_tasks = []
                 for node in node_batch:
-                    task = self._execute_node(node, execution_context)
+                    task = self._execute_node_with_timing(node, execution_context)
                     batch_tasks.append(task)
                 
-                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+                batch_results = await asyncio.gather(*batch_tasks)
                 
                 # Process batch results and handle errors
                 for node, result in zip(node_batch, batch_results):
-                    if isinstance(result, Exception):
-                        raise result
-                    node_results[node.id] = result
-                    print(f"Node {node.id} completed: {type(result).__name__}")
+                    node_execution_stats[node.id] = result["telemetry"]
+                    if not result["success"]:
+                        raise Exception(result["error"] or f"Node {node.id} failed")
+                    node_results[node.id] = result["data"]
             
             # Extract final output from last nodes
             final_output = self._extract_final_output(node_results, chain)
@@ -225,6 +224,7 @@ class ChainExecutor:
                 results=final_output,
                 node_results=node_results,
                 execution_time=execution_time,
+                node_execution_stats=node_execution_stats,
                 execution_graph=[[node.id for node in batch] for batch in execution_graph],
                 started_at=start_time.isoformat(),
                 completed_at=end_time.isoformat()
@@ -239,12 +239,41 @@ class ChainExecutor:
                 chain_id=chain.id,
                 execution_id=execution_id,
                 results={},
-                node_results={},
+                node_results=node_results,
                 execution_time=execution_time,
                 error=str(e),
+                node_execution_stats=node_execution_stats,
                 started_at=start_time.isoformat(),
                 completed_at=end_time.isoformat()
             )
+
+    async def _execute_node_with_timing(self, node: ChainNode, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute node and capture telemetry regardless of success/failure."""
+        node_start = datetime.now()
+        try:
+            node_data = await self._execute_node(node, context)
+            success = True
+            error = None
+        except Exception as exc:
+            node_data = {}
+            success = False
+            error = str(exc)
+        node_end = datetime.now()
+
+        telemetry = {
+            "duration_seconds": (node_end - node_start).total_seconds(),
+            "success": success,
+            "error": error,
+            "plugin_id": node.plugin_id,
+            "node_type": node.type.value if hasattr(node.type, "value") else str(node.type),
+        }
+
+        return {
+            "success": success,
+            "error": error,
+            "data": node_data,
+            "telemetry": telemetry,
+        }
     
     def _build_execution_graph(self, chain: ChainDefinition) -> List[List[ChainNode]]:
         """Build execution graph using topological sort for parallel execution"""

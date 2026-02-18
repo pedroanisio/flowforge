@@ -15,6 +15,7 @@ class TestChainValidator:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[],
             connections=[]
         )
@@ -29,11 +30,13 @@ class TestChainValidator:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[
                 ChainNode(
                     id="node1",
                     type=ChainNodeType.PLUGIN,
                     plugin_id="text_stat",
+                    position={"x": 0, "y": 0},
                     config={}
                 )
             ],
@@ -50,11 +53,13 @@ class TestChainValidator:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[
                 ChainNode(
                     id="node1",
                     type=ChainNodeType.PLUGIN,
                     plugin_id="nonexistent_plugin",
+                    position={"x": 0, "y": 0},
                     config={}
                 )
             ],
@@ -72,9 +77,10 @@ class TestChainValidator:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[
-                ChainNode(id="node1", type=ChainNodeType.PLUGIN, plugin_id="text_stat", config={}),
-                ChainNode(id="node2", type=ChainNodeType.PLUGIN, plugin_id="text_stat", config={})
+                ChainNode(id="node1", type=ChainNodeType.PLUGIN, plugin_id="text_stat", position={"x": 0, "y": 0}, config={}),
+                ChainNode(id="node2", type=ChainNodeType.PLUGIN, plugin_id="text_stat", position={"x": 1, "y": 0}, config={})
             ],
             connections=[
                 ChainConnection(id="conn1", source_node_id="node1", target_node_id="node2"),
@@ -98,11 +104,13 @@ class TestChainExecutor:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[
                 ChainNode(
                     id="node1",
                     type=ChainNodeType.PLUGIN,
                     plugin_id="text_stat",
+                    position={"x": 0, "y": 0},
                     config={}
                 )
             ],
@@ -114,6 +122,10 @@ class TestChainExecutor:
         assert result.success == True
         assert result.error is None
         assert "word_count" in result.results
+        assert "node1" in result.node_execution_stats
+        assert result.node_execution_stats["node1"]["success"] == True
+        assert result.node_execution_stats["node1"]["plugin_id"] == "text_stat"
+        assert result.node_execution_stats["node1"]["duration_seconds"] >= 0.0
 
     @pytest.mark.asyncio
     async def test_execute_invalid_chain(self, plugin_manager):
@@ -122,6 +134,7 @@ class TestChainExecutor:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[],
             connections=[]
         )
@@ -139,10 +152,11 @@ class TestChainExecutor:
         chain = ChainDefinition(
             id="test-chain",
             name="Test Chain",
+            description="",
             nodes=[
-                ChainNode(id="node1", type=ChainNodeType.PLUGIN, plugin_id="text_stat", config={}),
-                ChainNode(id="node2", type=ChainNodeType.PLUGIN, plugin_id="text_stat", config={}),
-                ChainNode(id="node3", type=ChainNodeType.PLUGIN, plugin_id="text_stat", config={})
+                ChainNode(id="node1", type=ChainNodeType.PLUGIN, plugin_id="text_stat", position={"x": 0, "y": 0}, config={}),
+                ChainNode(id="node2", type=ChainNodeType.PLUGIN, plugin_id="text_stat", position={"x": 1, "y": 0}, config={}),
+                ChainNode(id="node3", type=ChainNodeType.PLUGIN, plugin_id="text_stat", position={"x": 2, "y": 0}, config={})
             ],
             connections=[
                 ChainConnection(id="conn1", source_node_id="node1", target_node_id="node2"),
@@ -157,3 +171,31 @@ class TestChainExecutor:
         assert execution_graph[0][0].id == "node1"
         assert execution_graph[1][0].id == "node2"
         assert execution_graph[2][0].id == "node3"
+
+    @pytest.mark.asyncio
+    async def test_failed_node_captures_telemetry(self, plugin_manager):
+        """Test failed node still records execution telemetry"""
+        executor = ChainExecutor(plugin_manager)
+        chain = ChainDefinition(
+            id="test-chain",
+            name="Test Chain",
+            description="",
+            nodes=[
+                ChainNode(
+                    id="node1",
+                    type=ChainNodeType.PLUGIN,
+                    plugin_id="text_stat",
+                    position={"x": 0, "y": 0},
+                    config={}
+                )
+            ],
+            connections=[]
+        )
+
+        result = await executor.execute_chain(chain, {})
+
+        assert result.success == False
+        assert result.error is not None
+        assert "node1" in result.node_execution_stats
+        assert result.node_execution_stats["node1"]["success"] == False
+        assert result.node_execution_stats["node1"]["duration_seconds"] >= 0.0

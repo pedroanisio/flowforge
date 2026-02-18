@@ -20,7 +20,7 @@ class ChainManager:
         self.plugin_manager = plugin_manager
         self.storage = ChainStorageManager(base_dir)
         self.executor = ChainExecutor(plugin_manager)
-        self.history_manager = ExecutionHistoryManager()
+        self.history_manager = ExecutionHistoryManager(data_dir=f"{base_dir}/execution_history")
 
         # Initialize with sample templates
         self._ensure_sample_templates()
@@ -140,6 +140,22 @@ class ChainManager:
                     input_size_bytes = file_data["size"]
 
             # Create execution record
+            node_execution_stats = result.node_execution_stats or {}
+            node_durations = {}
+            node_results = {}
+            node_plugins = {}
+
+            for node_id, telemetry in node_execution_stats.items():
+                duration = telemetry.get("duration_seconds")
+                if isinstance(duration, (int, float)):
+                    node_durations[node_id] = float(duration)
+
+                node_results[node_id] = "success" if telemetry.get("success", False) else "failed"
+
+                plugin_id = telemetry.get("plugin_id")
+                if plugin_id:
+                    node_plugins[node_id] = plugin_id
+
             record = ExecutionRecord(
                 id=result.execution_id,
                 chain_id=chain.id,
@@ -147,11 +163,12 @@ class ChainManager:
                 duration_seconds=result.execution_time,
                 success=result.success,
                 input_size_bytes=input_size_bytes,
-                node_durations={},
-                node_results={},
+                node_durations=node_durations,
+                node_results=node_results,
+                node_plugins=node_plugins,
                 plugins_used=plugins_used,
                 error_message=result.error,
-                metadata={}
+                metadata={"execution_graph": result.execution_graph}
             )
 
             # Record in history

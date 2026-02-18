@@ -70,6 +70,10 @@ class ChainExecutionResult(BaseModel):
     node_results: Dict[str, Dict[str, Any]] = Field(..., description="Individual node results")
     execution_time: float = Field(..., description="Total execution time")
     error: Optional[str] = Field(None, description="Error message if failed")
+    node_execution_stats: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Per-node execution telemetry (duration, status, error, plugin_id)"
+    )
     execution_graph: List[List[str]] = Field(default_factory=list, description="Execution order by batches")
     started_at: str = Field(default_factory=lambda: datetime.now().isoformat(), description="Execution start time")
     completed_at: str = Field(default_factory=lambda: datetime.now().isoformat(), description="Execution completion time")
