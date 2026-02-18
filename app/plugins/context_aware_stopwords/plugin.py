@@ -1,5 +1,6 @@
 import re
-from typing import Dict, Any, Type, List, Tuple, Set
+from typing import Dict, Any, Type, List, Tuple, Set, Literal
+from pydantic import BaseModel, Field
 from ...models.plugin import BasePlugin, BasePluginResponse
 from .models import ContextAwareStopwordsResponse, WordInfo, ProcessingStatistics
 
@@ -11,6 +12,45 @@ try:
     NLTK_AVAILABLE = True
 except ImportError:
     NLTK_AVAILABLE = False
+
+
+class ContextAwareStopwordsInput(BaseModel):
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=100000,
+        json_schema_extra={
+            "label": "Text to Process",
+            "field_type": "textarea",
+            "placeholder": "Enter your text here for context-aware stopword removal...",
+        },
+    )
+    method: Literal["standard", "context_aware", "pos_based"] = Field(
+        default="context_aware",
+        json_schema_extra={
+            "label": "Removal Method",
+            "field_type": "select",
+            "options": ["standard", "context_aware", "pos_based"],
+            "help": "Standard: basic stopword list; Context-aware: preserves words based on context; POS-based: uses part-of-speech tagging",
+        },
+    )
+    preserve_important: bool = Field(
+        default=True,
+        json_schema_extra={
+            "label": "Preserve Important Words",
+            "field_type": "checkbox",
+            "help": "When enabled, preserves words that might be stopwords but are important in context (e.g., 'will' as a noun vs. auxiliary verb)",
+        },
+    )
+    custom_stopwords: str = Field(
+        default="",
+        json_schema_extra={
+            "label": "Additional Stopwords",
+            "field_type": "text",
+            "placeholder": "word1, word2, word3",
+            "help": "Comma-separated list of additional words to remove (optional)",
+        },
+    )
 
 
 class Plugin(BasePlugin):
@@ -35,6 +75,11 @@ class Plugin(BasePlugin):
                 except Exception:
                     pass
     
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return ContextAwareStopwordsInput
+
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:
         """Return the Pydantic model for this plugin's response"""

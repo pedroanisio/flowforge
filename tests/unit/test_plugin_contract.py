@@ -143,6 +143,16 @@ def test_manifest_runtime_parity_clean_when_aligned():
 def test_migrated_plugins_define_input_model():
     from app.plugins.text_stat.plugin import Plugin as TextStatPlugin
     from app.plugins.bag_of_words.plugin import Plugin as BagOfWordsPlugin
+    from app.plugins.context_aware_stopwords.plugin import Plugin as ContextAwareStopwordsPlugin
+    from app.plugins.web_sentence_analyzer.plugin import Plugin as WebSentenceAnalyzerPlugin
 
     assert TextStatPlugin.get_input_model() is not None
     assert BagOfWordsPlugin.get_input_model() is not None
+    assert ContextAwareStopwordsPlugin.get_input_model() is not None
+    assert WebSentenceAnalyzerPlugin.get_input_model() is not None
+
+    # sentence_merger imports heavy NLP dependencies at module load time in this repo;
+    # assert migration marker without importing the plugin module.
+    with open("app/plugins/sentence_merger/plugin.py", "r", encoding="utf-8") as file:
+        source = file.read()
+    assert "def get_input_model(" in source

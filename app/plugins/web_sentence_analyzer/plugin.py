@@ -103,6 +103,40 @@ class WebSentenceAnalyzerResponse(BasePluginResponse):
     error: Optional[str] = Field(None, description="Error message if analysis failed")
 
 
+class WebSentenceAnalyzerInput(BaseModel):
+    url: str = Field(
+        ...,
+        min_length=8,
+        max_length=2000,
+        json_schema_extra={
+            "label": "Website URL",
+            "field_type": "text",
+            "placeholder": "https://example.com",
+            "help": "Enter the full URL of the webpage you want to analyze (must include http:// or https://)",
+        },
+    )
+    max_sentences: int = Field(
+        default=50,
+        ge=1,
+        le=1000,
+        json_schema_extra={
+            "label": "Maximum Sentences to Return",
+            "field_type": "number",
+            "help": "Limit the number of sentences in the results (default: 50)",
+        },
+    )
+    min_sentence_length: int = Field(
+        default=10,
+        ge=1,
+        le=200,
+        json_schema_extra={
+            "label": "Minimum Sentence Length",
+            "field_type": "number",
+            "help": "Filter out sentences shorter than this number of characters (default: 10)",
+        },
+    )
+
+
 @dataclass
 class AnalyzerConfig:
     """Configuration class for DOMContentAnalyzer"""
@@ -710,6 +744,11 @@ class Plugin(BasePlugin):
         
         # Initialize DOM content analyzer
         self.analyzer = DOMContentAnalyzer()
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return WebSentenceAnalyzerInput
     
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:

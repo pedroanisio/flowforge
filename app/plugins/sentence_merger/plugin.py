@@ -1,15 +1,51 @@
 import re
+import json
 import time
-from typing import Dict, Any, Type, List
+from typing import Dict, Any, Type, List, Optional, Union
 from collections import defaultdict, Counter
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics.pairwise import cosine_similarity
 import spacy
+from pydantic import BaseModel, Field
 
 from ...models.plugin import BasePlugin, BasePluginResponse
 from .models import SentenceMergerResponse, SentenceCluster
+
+
+class SentenceMergerInput(BaseModel):
+    text: str = Field(
+        default="",
+        max_length=500000,
+        json_schema_extra={
+            "label": "Text to Analyze",
+            "field_type": "textarea",
+            "placeholder": "Enter your text here for sentence merging analysis...",
+            "help": "Input text will be automatically split into sentences. Alternatively, use the sentences field for pre-split sentences.",
+        },
+    )
+    sentences: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        json_schema_extra={
+            "label": "Pre-split Sentences (JSON Array)",
+            "field_type": "textarea",
+            "placeholder": "[\"First sentence.\", \"Second sentence.\", \"Third sentence.\"]",
+            "help": "Optional: Provide sentences as a JSON array. If provided, this takes precedence over the text field.",
+        },
+    )
+    similarity_threshold: float = Field(
+        default=0.68,
+        ge=0.1,
+        le=0.99,
+        json_schema_extra={
+            "label": "Similarity Threshold",
+            "field_type": "number",
+            "placeholder": "0.68",
+            "validation": {"step": 0.01},
+            "help": "Similarity threshold for clustering (0.1-0.99). Lower values (0.6-0.7) merge more aggressively, higher values (0.75-0.9) are more conservative. Default 0.68 balances quality and reduction.",
+        },
+    )
 
 
 class SentenceMerger:
@@ -246,6 +282,11 @@ class SentenceMerger:
 
 class Plugin(BasePlugin):
     """Enhanced Sentence Merger Plugin - Merges similar sentences using advanced semantic clustering"""
+
+    @classmethod
+    def get_input_model(cls) -> Type[BaseModel]:
+        """Return the canonical input model for this plugin."""
+        return SentenceMergerInput
     
     @classmethod
     def get_response_model(cls) -> Type[BasePluginResponse]:
@@ -274,7 +315,7 @@ class Plugin(BasePlugin):
             # Split text into sentences using improved regex
             sentences = self._split_into_sentences(text)
         elif sentences_input:
-            sentences = [s.strip() for s in sentences_input if s.strip()]
+            sentences = self._normalize_sentences_input(sentences_input)
         else:
             sentences = []
         
@@ -335,6 +376,32 @@ class Plugin(BasePlugin):
                 "clustering_time_seconds": round(clustering_time, 3)
             }
         }
+
+    def _normalize_sentences_input(self, sentences_input: Union[str, List[str]]) -> List[str]:
+        """Normalize `sentences` from JSON array text, newline text, or list input."""
+        if isinstance(sentences_input, str):
+            raw = sentences_input.strip()
+            if not raw:
+                return []
+
+            parsed_values: Optional[List[Any]] = None
+            if raw.startswith("["):
+                try:
+                    parsed_candidate = json.loads(raw)
+                    if isinstance(parsed_candidate, list):
+                        parsed_values = parsed_candidate
+                except json.JSONDecodeError:
+                    parsed_values = None
+
+            if parsed_values is None:
+                parsed_values = [segment for segment in re.split(r'[\r\n]+', raw) if segment]
+
+            return [str(item).strip() for item in parsed_values if str(item).strip()]
+
+        if isinstance(sentences_input, list):
+            return [str(item).strip() for item in sentences_input if str(item).strip()]
+
+        return []
     
     def _split_into_sentences(self, text: str) -> List[str]:
         """Enhanced sentence splitting with better handling of edge cases"""
